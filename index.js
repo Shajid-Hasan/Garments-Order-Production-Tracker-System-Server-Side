@@ -53,6 +53,14 @@ async function run() {
             });
         });
 
+        app.get("/users/admin", async (req, res) => {
+            const email = req.query.email;
+            if (!email) return res.status(400).send({ admin: false });
+
+            const user = await usersCollection.findOne({ email });
+            res.send({ admin: user?.role === "admin" });
+        });
+
         app.get("/users/:id", async (req, res) => {
             const user = await usersCollection.findOne({ _id: new ObjectId(req.params.id) });
             res.send(user);
@@ -90,21 +98,15 @@ async function run() {
             res.send(result);
         });
 
-        // app.get("/users/role/:id", async (req, res) => {
-        //     const user = await usersCollection.findOne({ _id: new ObjectId(req.params.id) });
-        //     res.send({role: user.role});
-        // });
+        app.get("/users/role/:id", async (req, res) => {
+            const user = await usersCollection.findOne({ _id: new ObjectId(req.params.id) });
+            res.send({role: user.role});
+        });
 
         
 
 
-        app.get("/users/admin", async (req, res) => {
-            const email = req.query.email;
-            if (!email) return res.status(400).send({ admin: false });
-
-            const user = await usersCollection.findOne({ email });
-            res.send({ admin: user?.role === "admin" });
-        });
+       
 
         // =========================
         // PRODUCTS ROUTES
