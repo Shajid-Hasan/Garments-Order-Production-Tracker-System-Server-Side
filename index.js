@@ -38,6 +38,47 @@ async function run() {
         // =========================
         // GET USER ROLE BY EMAIL
         // =========================
+
+        // app.post('/users', async (req, res) => {
+        //     const newUser = req.body;
+        //     const existingUser = await usersCollection.findOne({ email: newUser.email });
+
+        //     if (existingUser) return res.send({ message: "User already exists" });
+
+        //     const result = await usersCollection.insertOne({
+        //         ...newUser,
+        //         role: newUser.role || "buyer",
+        //         status: "active",
+        //         suspendReason: null
+        //     });
+        //     res.send(result);
+        // });
+
+        app.post('/users', async (req, res) => {
+            const newUser = req.body;
+
+            if (!newUser?.email) {
+                return res.status(400).send({ message: "Email is required" });
+            }
+
+            const existingUser = await usersCollection.findOne({ email: newUser.email });
+
+            if (existingUser) {
+                return res.status(409).send({ message: "User already exists" });
+            }
+
+            const result = await usersCollection.insertOne({
+                ...newUser,
+                role: newUser.role || "buyer",
+                status: "active",
+                suspendReason: null,
+                createdAt: new Date()
+            });
+
+            res.send(result);
+        });
+
+
         app.get("/users/role", async (req, res) => {
             const email = req.query.email;
 
@@ -66,20 +107,7 @@ async function run() {
             res.send(user);
         });
 
-        app.post('/users', async (req, res) => {
-            const newUser = req.body;
-            const existingUser = await usersCollection.findOne({ email: newUser.email });
-
-            if (existingUser) return res.send({ message: "User already exists" });
-
-            const result = await usersCollection.insertOne({
-                ...newUser,
-                role: newUser.role || "buyer",
-                status: "active",
-                suspendReason: null
-            });
-            res.send(result);
-        });
+        
 
         app.patch('/users/role/:id', async (req, res) => {
             const result = await usersCollection.updateOne(
@@ -98,15 +126,10 @@ async function run() {
             res.send(result);
         });
 
-        app.get("/users/role/:id", async (req, res) => {
-            const user = await usersCollection.findOne({ _id: new ObjectId(req.params.id) });
-            res.send({role: user.role});
-        });
-
-        
-
-
-       
+        // app.get("/users/role/:id", async (req, res) => {
+        //     const user = await usersCollection.findOne({ _id: new ObjectId(req.params.id) });
+        //     res.send({role: user.role});
+        // });
 
         // =========================
         // PRODUCTS ROUTES
@@ -155,6 +178,15 @@ async function run() {
 
         // Create order
         app.post('/booking', async (req, res) => {
+            const { userRole } = req.body;
+
+            // 🔐 BACKEND ROLE PROTECTION
+            if (userRole === "admin" || userRole === "manager") {
+                return res.status(403).send({
+                    message: "Admins and Managers are not allowed to place orders"
+                });
+            }
+
             const order = {
                 ...req.body,
                 status: "pending",
@@ -163,9 +195,11 @@ async function run() {
                 ],
                 createdAt: new Date(),
             };
+
             const result = await bookingCollection.insertOne(order);
             res.send(result);
         });
+
 
         // Get all orders (Admin)
         app.get('/orders', async (req, res) => {
