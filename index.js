@@ -35,24 +35,6 @@ async function run() {
             res.send(users);
         });
 
-        // =========================
-        // GET USER ROLE BY EMAIL
-        // =========================
-
-        // app.post('/users', async (req, res) => {
-        //     const newUser = req.body;
-        //     const existingUser = await usersCollection.findOne({ email: newUser.email });
-
-        //     if (existingUser) return res.send({ message: "User already exists" });
-
-        //     const result = await usersCollection.insertOne({
-        //         ...newUser,
-        //         role: newUser.role || "buyer",
-        //         status: "active",
-        //         suspendReason: null
-        //     });
-        //     res.send(result);
-        // });
 
         app.post('/users', async (req, res) => {
             const newUser = req.body;
@@ -126,10 +108,6 @@ async function run() {
             res.send(result);
         });
 
-        // app.get("/users/role/:id", async (req, res) => {
-        //     const user = await usersCollection.findOne({ _id: new ObjectId(req.params.id) });
-        //     res.send({role: user.role});
-        // });
 
         // =========================
         // PRODUCTS ROUTES
@@ -180,7 +158,7 @@ async function run() {
         app.post('/booking', async (req, res) => {
             const { userRole } = req.body;
 
-            // 🔐 BACKEND ROLE PROTECTION
+            //  BACKEND ROLE PROTECTION
             if (userRole === "admin" || userRole === "manager") {
                 return res.status(403).send({
                     message: "Admins and Managers are not allowed to place orders"
@@ -198,6 +176,89 @@ async function run() {
 
             const result = await bookingCollection.insertOne(order);
             res.send(result);
+        });
+
+        app.get('/booking/search', async (req, res) => {
+            const { email, id } = req.query;
+
+            // 🔎 Search by Order ID
+            if (id) {
+                const order = await bookingCollection.findOne({
+                    _id: new ObjectId(id)
+                });
+
+                if (!order) {
+                    return res.status(404).send({ message: "Order not found" });
+                }
+
+                return res.send(order);
+            }
+
+            // 🔎 Search by Email
+            if (email) {
+                const orders = await bookingCollection
+                    .find({ userEmail: email })
+                    .sort({ createdAt: -1 })
+                    .toArray();
+
+                return res.send(orders);
+            }
+
+            res.status(400).send({ message: "Provide email or order id" });
+        });
+
+        // GET ALL BOOKINGS (Admin / Manager only)
+        app.get('/booking', async (req, res) => {
+            const email = req.query.email; // Logged-in user email
+
+            if (!email) {
+                return res.status(400).send({ message: "Email is required" });
+            }
+
+            // Find user role from usersCollection
+            const user = await usersCollection.findOne({ email });
+
+            if (!user) {
+                return res.status(404).send({ message: "User not found" });
+            }
+
+            // Only admin or manager can access
+            if (user.role !== "admin" && user.role !== "manager") {
+                return res.status(403).send({ message: "Access denied" });
+            }
+
+            // Get all bookings
+            const bookings = await bookingCollection.find().sort({ createdAt: -1 }).toArray();
+
+            res.send(bookings);
+        });
+
+
+
+        // =========================
+        // TRACK ORDER (BUYER - READ ONLY)
+        // =========================
+        app.get("/orders/tracking/:orderId", async (req, res) => {
+            const orderId = req.params.orderId;
+
+            const order = await bookingCollection.findOne({
+                _id: new ObjectId(orderId)
+            });
+
+            if (!order) {
+                return res.status(404).send({ message: "Order not found" });
+            }
+
+            res.send({
+                orderInfo: {
+                    orderId: order._id,
+                    productName: order.productName,
+                    quantity: order.quantity,
+                    status: order.status,
+                    payment: order.paymentMethod || "COD"
+                },
+                trackingSteps: order.trackingHistory || []
+            });
         });
 
 
