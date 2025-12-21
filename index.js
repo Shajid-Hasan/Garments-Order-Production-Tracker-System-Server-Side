@@ -84,12 +84,12 @@ async function run() {
             res.send({ admin: user?.role === "admin" });
         });
 
-        app.get("/users/:id", async (req, res) => {
-            const user = await usersCollection.findOne({ _id: new ObjectId(req.params.id) });
+        app.get("/users/:email", async (req, res) => {
+            const user = await usersCollection.findOne({email: req.params.email});
             res.send(user);
         });
 
-        
+
 
         app.patch('/users/role/:id', async (req, res) => {
             const result = await usersCollection.updateOne(
@@ -117,11 +117,6 @@ async function run() {
             res.send(result);
         });
 
-        app.get('/products/:id', async (req, res) => {
-            const result = await productsCollection.findOne({ _id: new ObjectId(req.params.id) });
-            res.send(result);
-        });
-
         // Get manager's products
         app.get('/products/manager', async (req, res) => {
             const email = req.query.email;
@@ -130,6 +125,14 @@ async function run() {
             const products = await productsCollection.find({ createdBy: email }).toArray();
             res.send(products);
         });
+
+
+
+        app.get('/products/:id', async (req, res) => {
+            const result = await productsCollection.findOne({ _id: new ObjectId(req.params.id) });
+            res.send(result);
+        });
+
 
         app.post('/products', async (req, res) => {
             const result = await productsCollection.insertOne(req.body);
@@ -181,7 +184,7 @@ async function run() {
         app.get('/booking/search', async (req, res) => {
             const { email, id } = req.query;
 
-            // 🔎 Search by Order ID
+            //  Search by Order ID
             if (id) {
                 const order = await bookingCollection.findOne({
                     _id: new ObjectId(id)
@@ -194,7 +197,7 @@ async function run() {
                 return res.send(order);
             }
 
-            // 🔎 Search by Email
+            //  Search by Email
             if (email) {
                 const orders = await bookingCollection
                     .find({ userEmail: email })
@@ -303,6 +306,68 @@ async function run() {
             res.send(result);
         });
 
+        // APPROVED ORDER
+        app.patch("/orders/:id/reject", async (req, res) => {
+            try {
+                const { id } = req.params;
+
+                const result = await bookingCollection.updateOne(
+                    { _id: new ObjectId(id) },
+                    {
+                        $set: {
+                            status: "rejected",
+                            rejectedAt: new Date()
+                        },
+                        $push: {
+                            trackingHistory: {
+                                status: "rejected",
+                                date: new Date()
+                            }
+                        }
+                    }
+                );
+
+                if (result.matchedCount === 0) {
+                    return res.status(404).send({ message: "Order not found" });
+                }
+
+                res.send({ success: true, message: "Order rejected" });
+            } catch (error) {
+                console.error("Reject error:", error);
+                res.status(500).send({ message: "Failed to reject order" });
+            }
+        });
+        app.patch("/orders/:id/approve", async (req, res) => {
+            try {
+                const { id } = req.params;
+
+                const result = await bookingCollection.updateOne(
+                    { _id: new ObjectId(id) },
+                    {
+                        $set: {
+                            status: "approved",
+                            approvedAt: new Date()
+                        },
+                        $push: {
+                            trackingHistory: {
+                                status: "approved",
+                                date: new Date()
+                            }
+                        }
+                    }
+                );
+
+                if (result.matchedCount === 0) {
+                    return res.status(404).send({ message: "Order not found" });
+                }
+
+                res.send({ success: true, message: "Order approved" });
+            } catch (error) {
+                console.error("Approve error:", error);
+                res.status(500).send({ message: "Failed to approve order" });
+            }
+        });
+
         // Add tracking update
         app.post('/orders/:id/tracking', async (req, res) => {
             const tracking = req.body; // { status, note, location, date }
@@ -311,6 +376,40 @@ async function run() {
                 { $push: { trackingHistory: tracking } }
             );
             res.send(result);
+        });
+
+        // ================= GET MANAGER PRODUCTS =================
+        // ================= GET MANAGER PRODUCTS BY EMAIL OR PRODUCT ID =================
+        app.get("/products/manager", async (req, res) => {
+            try {
+                const { email, id, search } = req.query;
+
+                if (!email && !id) {
+                    return res.status(400).send({ message: "Email or Product ID is required" });
+                }
+
+                let query = {};
+
+                if (id) {
+                    query._id = new ObjectId(id);
+                } else if (email) {
+                    query.createdBy = email;
+
+
+                    if (search) {
+                        query.$or = [
+                            { name: { $regex: search, $options: "i" } },
+                            { category: { $regex: search, $options: "i" } }
+                        ];
+                    }
+                }
+
+                const products = await productsCollection.find(query).toArray();
+                res.send(products);
+            } catch (error) {
+                console.error(error);
+                res.status(500).send({ message: "Failed to fetch products" });
+            }
         });
 
         console.log("All routes are ready");
